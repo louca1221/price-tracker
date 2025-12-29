@@ -2,8 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 
 # --- CONFIG ---
-TOKEN = "8301089640:AAFOvACPsM8xiUZk4ASLbW3aGJIdEDiI-po"
-CHAT_ID = "1328211466"
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID"
 URL = "https://www.metal.com/Lithium/201906260003"
 
 def get_price():
@@ -35,4 +35,5 @@ def send_msg(text):
 # Execution
 price = get_price()
 send_msg(f"Spodumene Concentrate Index (CIF China) Price, USD/mt Avg.:: {price}")
+
 print(f"Script finished. Result: {price}")
