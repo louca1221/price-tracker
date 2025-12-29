@@ -47,10 +47,7 @@ def get_change():
             
     except Exception as e:
         return f"Connection Error: {e}"
-
-def get_change():
-    # ... (rest of your existing headers and request code)
-    
+        
     if price_element:
         full_text = change_element.text.strip()
         
@@ -66,7 +63,7 @@ def get_change():
         
         return full_text # Fallback if no bracket is found
     else:
-        return "Price not found"
+        return "Change not found"
 
 def send_msg(text):
     base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -87,5 +84,6 @@ message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n
 # 4. Send and Print
 send_msg(message)
 print(f"Script finished. Result: {price}{change}")
+
 
 
