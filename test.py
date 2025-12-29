@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime
 import os
 from bs4 import BeautifulSoup
 
@@ -35,8 +36,10 @@ def send_msg(text):
 
 # Execution
 price = get_price()
-send_msg(f"Spodumene Concentrate Index (CIF China) Price, USD/mt Avg.:: {price}")
+send_msg(f"date:{now}\n
+Spodumene Concentrate Index (CIF China) Price, USD/mt Avg.:: {price}")
 
 print(f"Script finished. Result: {price}")
+
 
 
