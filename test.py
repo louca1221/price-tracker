@@ -1,4 +1,5 @@
 import requests
+import os
 from bs4 import BeautifulSoup
 
 # --- CONFIG ---
@@ -37,4 +38,5 @@ price = get_price()
 send_msg(f"Spodumene Concentrate Index (CIF China) Price, USD/mt Avg.:: {price}")
 
 print(f"Script finished. Result: {price}")
+
 
