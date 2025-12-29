@@ -9,7 +9,6 @@ CHAT_ID = os.getenv("CHAT_ID")
 URL = "https://www.metal.com/Lithium/201906260003"
 
 def get_price():
-    # These headers make you look like a real browser
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
@@ -18,30 +17,32 @@ def get_price():
         response = requests.get(URL, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Change 'span' and 'price-class' to match your specific site
-        price_element = soup.find("span", class_="strong___3sC58 priceUp___3Mgsl") 
+        # This is the specific class for Spodumene Index on metal.com
+        price_element = soup.find("span", class_="strong___3sC58") 
         
         if price_element:
             return price_element.text.strip()
         else:
-            return "Could not find the price tag on the page."
+            return "Price Unavailable (Site might be blocking the bot)"
             
     except Exception as e:
-        return f"Error connecting to site: {e}"
+        return f"Connection Error: {e}"
 
 def send_msg(text):
     base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text}
     requests.post(base_url, data=payload)
-    now = datetime.now().strftime("%b %d, %Y - %H:%M")
 
-# Execution
+# --- EXECUTION ---
+# 1. Generate the date first so it is available for the message
+now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
+
+# 2. Get the price
 price = get_price()
-send_msg(f"date:{now}
-Spodumene Concentrate Index (CIF China) Price, USD/mt Avg.:: {price}")
 
+# 3. Create the final message
+message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt"
+
+# 4. Send and Print
+send_msg(message)
 print(f"Script finished. Result: {price}")
-
-
-
-
