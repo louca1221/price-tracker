@@ -62,8 +62,9 @@ price = get_price()
 change = get_change()
 
 # 3. Create the final message
-message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt Change: {change}"
+message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt \n Change: {change}"
 
 # 4. Send and Print
 send_msg(message)
 print(f"Script finished. Result: {price}")
+
