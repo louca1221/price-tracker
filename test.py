@@ -38,12 +38,12 @@ def get_change():
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # This is the specific class for Spodumene Index on metal.com
-        price_element = soup.find("span", class_="priceUp___3Mgsl") 
+        change_element = soup.find("div", class_="row___1PIPI") 
         
-        if price_element:
-            return price_element.text.strip()
+        if change_element:
+            return change_element.text.strip()
         else:
-            return "Price Unavailable (Site might be blocking the bot)"
+            return "Change Unavailable (Site might be blocking the bot)"
             
     except Exception as e:
         return f"Connection Error: {e}"
@@ -62,8 +62,14 @@ price = get_price()
 change = get_change()
 
 # 3. Create the final message
-message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt Change: {change}"
+message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt \n 📈 Change: {change}"
 
 # 4. Send and Print
 send_msg(message)
-print(f"Script finished. Result: {price}")
+print(f"Script finished. Result: {price}{change}")
+
+
+
+
+
+
