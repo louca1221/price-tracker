@@ -41,7 +41,7 @@ def get_change():
         change_element = soup.find("span", class_="priceUp___3Mgsl") 
         
         if change_element:
-            return cnange_element.text.strip()
+            return change_element.text.strip()
         else:
             return "Change Unavailable (Site might be blocking the bot)"
             
@@ -67,5 +67,6 @@ message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n
 # 4. Send and Print
 send_msg(message)
 print(f"Script finished. Result: {price}")
+
 
 
