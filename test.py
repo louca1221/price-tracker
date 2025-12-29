@@ -45,13 +45,15 @@ def get_change():
             if "(" in full_text:
             # Split at "(" and take the part after it
             # Example: "Price (150.00)" becomes "150.00)"
-            after_bracket = full_text.split("(")[1]
+            after_bracket = full_text.split("(")
             
             # Remove the closing ")" and any extra spaces
-            clean_change = after_bracket.replace(")", "").strip()
+            clean_change = after_bracket.replace(")",).strip()
             return clean_change
-        else:
-            return "Change Unavailable (Site might be blocking the bot)"
+
+        return full_text # Fallback if no bracket is found
+    else:
+        return "Change Unavailable (Site might be blocking the bot)"
             
     except Exception as e:
         return f"Connection Error: {e}"
@@ -75,6 +77,7 @@ message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n
 # 4. Send and Print
 send_msg(message)
 print(f"Script finished. Result: {price}{change}")
+
 
 
 
