@@ -33,13 +33,15 @@ def send_msg(text):
     base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text}
     requests.post(base_url, data=payload)
+    now = datetime.now().strftime("%b %d, %Y - %H:%M")
 
 # Execution
 price = get_price()
-send_msg(f"date:{now}\n
+send_msg(f"date:{now}
 Spodumene Concentrate Index (CIF China) Price, USD/mt Avg.:: {price}")
 
 print(f"Script finished. Result: {price}")
+
 
 
 
