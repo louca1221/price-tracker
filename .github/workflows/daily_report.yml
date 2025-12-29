@@ -2,7 +2,7 @@ name: Daily Price Report
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # This runs every day at Midnight UTC
+    - cron: '0 4 * * *'  # This runs every day at Midnight UTC
   workflow_dispatch:      # Allows you to run it manually to test
 
 jobs:
