@@ -8,7 +8,7 @@ TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 URL = "https://www.metal.com/Lithium/201906260003"
 
-def get_price():
+def get_data():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
@@ -17,39 +17,26 @@ def get_price():
         response = requests.get(URL, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # This is the specific class for Spodumene Index on metal.com
-        price_element = soup.find("span", class_="strong___3sC58") 
+        # 1. Get the Price
+        price_el = soup.find("span", class_="strong___3sC58")
+        price = price_el.text.strip() if price_el else "N/A"
         
-        if price_element:
-            return price_element.text.strip()
+        # 2. Get the Change and split it
+        change_el = soup.find("div", class_="row___1PIPI")
+        if change_el:
+            change_text = change_el.text.strip()
+            # Split logic: if there is a "(", take the part after it
+            if "(" in change_text:
+                change = change_text.split("(")[1].replace(")", "").strip()
+            else:
+                change = change_text
         else:
-            return "Price Unavailable (Site might be blocking the bot)"
+            change = "N/A"
+            
+        return price, change
             
     except Exception as e:
-        return f"Connection Error: {e}"
-        
-def get_change():
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    
-    try:
-        response = requests.get(URL, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # This is the specific class for Spodumene Index on metal.com
-        change_element = soup.find("div", class_="row___1PIPI") 
-        
-        if change_element:
-            return change_element.text.strip()
-            if "(" in full_text:
-                return full_text.split("(")[1].replace(")", "").strip()
-            return full_text
-        else:
-            return "Change Unavailable (Site might be blocking the bot)"
-            
-    except Exception as e:
-        return f"Connection Error: {e}"
+        return f"Error: {e}", "Error"
 
 def send_msg(text):
     base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -57,18 +44,15 @@ def send_msg(text):
     requests.post(base_url, data=payload)
 
 # --- EXECUTION ---
-# 1. Generate the date first so it is available for the message
 now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
+price, change = get_data()
 
-# 2. Get the price
-price = get_price()
-change = get_change()
+message = (
+    f"📅 Date: {now_str}\n"
+    f"📦 Spodumene Concentrate Index (CIF China)\n"
+    f"💰 Price: {price} USD/mt\n"
+    f"📈 Change: {change}"
+)
 
-# 3. Create the final message
-message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt \n 📈 Change: {change}"
-
-# 4. Send and Print
 send_msg(message)
-print(f"Script finished. Result: {price}{change}")
-
-
+print(f"Report Sent: {price} | {change}")
