@@ -37,33 +37,20 @@ def get_change():
         response = requests.get(URL, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # This is the specific class for Spodumene Index on metal.com
+        # Target the price span
         change_element = soup.find("div", class_="row___1PIPI") 
         
         if change_element:
-            return change_element.text.strip()
+            full_text = change_element.text.strip()
+            # Bring text after "("
+            if "(" in full_text:
+                return full_text.split("(")[1].replace(")", "").strip()
+            return full_text
         else:
-            return "Change Unavailable (Site might be blocking the bot)"
+            return "Price tag not found"
             
     except Exception as e:
-        return f"Connection Error: {e}"
-        
-    if change_element:
-        full_text = change_element.text.strip()
-        
-        # Check if the "(" is actually in the text to avoid errors
-        if "(" in full_text:
-            # Split at "(" and take the part after it
-            # Example: "Price (150.00)" becomes "150.00)"
-            after_bracket = full_text.split("(")[1]
-            
-            # Remove the closing ")" and any extra spaces
-            clean_change = after_bracket.replace(")", "").strip()
-            return clean_change
-        
-        return full_text # Fallback if no bracket is found
-    else:
-        return "Change not found"
+        return f"Error: {e}"
 
 def send_msg(text):
     base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -84,6 +71,7 @@ message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n
 # 4. Send and Print
 send_msg(message)
 print(f"Script finished. Result: {price}{change}")
+
 
 
 
