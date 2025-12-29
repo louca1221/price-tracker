@@ -37,20 +37,16 @@ def get_change():
         response = requests.get(URL, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Target the price span
-        change_element = soup.find("div", class_="row___1PIPI") 
+        # This is the specific class for Spodumene Index on metal.com
+        price_element = soup.find("span", class_="priceUp___3Mgsl") 
         
-        if change_element:
-            full_text = change_element.text.strip()
-            # Bring text after "("
-            if "(" in full_text:
-                return full_text.split("(")[1].replace(")", "").strip()
-            return full_text
+        if price_element:
+            return price_element.text.strip()
         else:
-            return "Price tag not found"
+            return "Price Unavailable (Site might be blocking the bot)"
             
     except Exception as e:
-        return f"Error: {e}"
+        return f"Connection Error: {e}"
 
 def send_msg(text):
     base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -66,13 +62,8 @@ price = get_price()
 change = get_change()
 
 # 3. Create the final message
-message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt \n 📈 Change: {change}"
+message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt Change: {change}"
 
 # 4. Send and Print
 send_msg(message)
-print(f"Script finished. Result: {price}{change}")
-
-
-
-
-
+print(f"Script finished. Result: {price}")
