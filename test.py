@@ -48,7 +48,7 @@ def get_change():
     except Exception as e:
         return f"Connection Error: {e}"
         
-    if price_element:
+    if change_element:
         full_text = change_element.text.strip()
         
         # Check if the "(" is actually in the text to avoid errors
@@ -84,6 +84,7 @@ message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n
 # 4. Send and Print
 send_msg(message)
 print(f"Script finished. Result: {price}{change}")
+
 
 
 
