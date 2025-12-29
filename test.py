@@ -38,7 +38,7 @@ def get_change():
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # This is the specific class for Spodumene Index on metal.com
-        change_element = soup.find("div", class_="row___1PIPI") 
+        change_element = soup.find("Div", class_="block___2Rney") 
         
         if change_element:
             return change_element.text.strip()
@@ -67,9 +67,3 @@ message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n
 # 4. Send and Print
 send_msg(message)
 print(f"Script finished. Result: {price}{change}")
-
-
-
-
-
-
