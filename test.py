@@ -27,6 +27,26 @@ def get_price():
             
     except Exception as e:
         return f"Connection Error: {e}"
+        
+def get_change():
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    try:
+        response = requests.get(URL, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # This is the specific class for Spodumene Index on metal.com
+        price_element = soup.find("span", class_="priceUp___3Mgsl") 
+        
+        if price_element:
+            return price_element.text.strip()
+        else:
+            return "Price Unavailable (Site might be blocking the bot)"
+            
+    except Exception as e:
+        return f"Connection Error: {e}"
 
 def send_msg(text):
     base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -39,9 +59,10 @@ now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
 
 # 2. Get the price
 price = get_price()
+change = get_change()
 
 # 3. Create the final message
-message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt"
+message = f"📅 Date: {now_str}\n📦 Spodumene Concentrate Index (CIF China)\n💰 Price: {price} USD/mt Change: {change}"
 
 # 4. Send and Print
 send_msg(message)
