@@ -38,20 +38,34 @@ def get_data():
         return f"Error: {e}", "Error"
 
 def send_msg(text):
-    # Splits comma-separated IDs from GitHub Secrets
-    chat_ids = os.getenv("CHAT_ID").split(",")
+    # 1. Get the raw string from GitHub Secrets
+    raw_ids = os.getenv("CHAT_ID")
     
+    if not raw_ids:
+        print("❌ Error: CHAT_ID secret is empty or not found.")
+        return
+
+    # 2. Split by comma and CLEAN every ID (removes spaces/tabs/newlines)
+    # This turns "123, 456" into ["123", "456"]
+    chat_ids = [cid.strip() for cid in raw_ids.split(",") if cid.strip()]
+    
+    print(f"DEBUG: Attempting to send to {len(chat_ids)} IDs: {chat_ids}")
+
     for chat_id in chat_ids:
         base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         payload = {
-            "chat_id": chat_id.strip(),
+            "chat_id": chat_id,
             "text": text
         }
         try:
-            response = requests.post(base_url, data=payload)
-            print(f"Sent to {chat_id}: {response.status_code}")
+            response = requests.post(base_url, data=payload, timeout=10)
+            if response.status_code == 200:
+                print(f"✅ Successfully sent to: {chat_id}")
+            else:
+                print(f"⚠️ Telegram rejected {chat_id}: {response.text}")
         except Exception as e:
-            print(f"Failed to send to {chat_id}: {e}")
+            print(f"❌ Network error for {chat_id}: {e}")
+
 
 # --- EXECUTION ---
 # Only run if it's a weekday (0=Mon, 4=Fri)
