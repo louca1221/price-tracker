@@ -25,7 +25,6 @@ def get_data():
         change_el = soup.find("div", class_="row___1PIPI")
         if change_el:
             change_text = change_el.text.strip()
-            # Split logic: if there is a "(", take the part after it
             if "(" in change_text:
                 change = change_text.split("(")[1].replace(")", "").strip()
             else:
@@ -39,20 +38,35 @@ def get_data():
         return f"Error: {e}", "Error"
 
 def send_msg(text):
-    base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": text}
-    requests.post(base_url, data=payload)
+    # Splits comma-separated IDs from GitHub Secrets
+    chat_ids = os.getenv("CHAT_ID").split(",")
+    
+    for chat_id in chat_ids:
+        base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        payload = {
+            "chat_id": chat_id.strip(),
+            "text": text
+        }
+        try:
+            response = requests.post(base_url, data=payload)
+            print(f"Sent to {chat_id}: {response.status_code}")
+        except Exception as e:
+            print(f"Failed to send to {chat_id}: {e}")
 
 # --- EXECUTION ---
-now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
-price, change = get_data()
+# Only run if it's a weekday (0=Mon, 4=Fri)
+if datetime.now().weekday() < 5:
+    now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
+    price, change = get_data()
 
-message = (
-    f"📅 Date: {now_str}\n"
-    f"📦 Spodumene Concentrate Index (CIF China)\n"
-    f"💰 Price: {price} USD/mt\n"
-    f"📈 Change: {change}"
-)
+    message = (
+        f"📅 Date: {now_str}\n"
+        f"📦 Spodumene Concentrate Index (CIF China)\n"
+        f"💰 Price: {price} USD/mt\n"
+        f"📈 Change: {change}"
+    )
 
-send_msg(message)
-print(f"Report Sent: {price} | {change}")
+    send_msg(message)
+    print(f"Report Sent: {price} | {change}")
+else:
+    print("Weekend skip: No report sent.")
