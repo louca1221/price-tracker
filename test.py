@@ -69,7 +69,7 @@ def send_msg(text):
 
 # --- EXECUTION ---
 # Only run if it's a weekday (0=Mon, 4=Fri)
-if datetime.now().weekday() < 5:
+if datetime.now().weekday() < 6:
     now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
     price, change = get_data()
 
