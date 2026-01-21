@@ -1,11 +1,9 @@
 name: Daily Price Report
 
 on:
-  schedule:
- # 0 = Minute, 4 = Hour, * * = Any Day/Month, 1-5 = Mon-Fri
-    - cron: '0 5 * * 1-5'
   workflow_dispatch:      # Allows you to run it manually to test
-
+  repository_dispatch:        # <--- THIS IS WHAT CRON-JOB.ORG HITS
+    types: [trigger-rns]
 jobs:
   build:
     runs-on: ubuntu-latest
