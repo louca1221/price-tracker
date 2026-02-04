@@ -4,7 +4,7 @@ import requests
 from datetime import datetime
 from playwright.async_api import async_playwright
 
-# --- CONFIG (Updated to match your Secret names) ---
+# --- CONFIG ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SMM_EMAIL = os.getenv("SMM_EMAIL")
@@ -19,30 +19,40 @@ async def get_data():
 
         try:
             print(f"🌐 Navigating to {URL}...")
-            await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(5000)
-
-            # --- STEP 1: CLEAR OVERLAYS ---
-            # Your logs show 'ant-modal-wrap' is the culprit. We'll remove it via JS.
-            await page.evaluate('() => { document.querySelectorAll(".ant-modal-mask, .ant-modal-wrap").forEach(el => el.remove()); }')
+            await page.goto(URL, wait_until="networkidle", timeout=60000)
+            
+            # --- STEP 1: REMOVE BLOCKING MODALS ---
+            await page.evaluate('() => { document.querySelectorAll(".ant-modal-mask, .ant-modal-wrap, .ant-modal").forEach(el => el.remove()); }')
             await page.keyboard.press("Escape")
 
-            # --- STEP 2: LOGIN ---
+            # --- STEP 2: OPEN LOGIN FORM ---
             login_btn = page.locator('text="Sign In", .signInButton').first
             if await login_btn.is_visible():
-                print("🔑 Clicking login...")
-                # dispatch_event avoids the "intercepts pointer events" error entirely
+                print("🔑 Clicking Sign In...")
                 await login_btn.dispatch_event("click")
+                # Wait for the login form to actually exist in the DOM
+                await page.wait_for_timeout(3000)
 
-            await page.wait_for_selector('input[type="email"]', timeout=15000)
-            await page.fill('input[type="email"]', SMM_EMAIL)
-            await page.fill('input[type="password"]', SMM_PASSWORD)
-            await page.locator('button[type="submit"]').first.dispatch_event("click")
+            # --- STEP 3: FILL LOGIN (Aggressive Search) ---
+            print("📝 Looking for email field...")
+            # We use a broader selector for the email/password fields
+            email_field = page.locator('input[type="email"], input[placeholder*="Email"], input[name*="mail"]').first
+            password_field = page.locator('input[type="password"], input[placeholder*="Pass"]').first
             
+            # Wait for it to be attached (not necessarily visible yet)
+            await email_field.wait_for(state="attached", timeout=20000)
+            
+            await email_field.fill(SMM_EMAIL)
+            await password_field.fill(SMM_PASSWORD)
+            
+            submit_btn = page.locator('button[type="submit"], button:has-text("Sign In"), .submit-btn').first
+            await submit_btn.dispatch_event("click")
+            
+            print("⏳ Waiting for login to complete...")
             await page.wait_for_load_state("networkidle")
 
-            # --- STEP 3: SCRAPE ---
-            await page.wait_for_selector(".strong___3sC58", timeout=20000)
+            # --- STEP 4: SCRAPE PRICE ---
+            await page.wait_for_selector(".strong___3sC58", timeout=30000)
             price = await page.inner_text(".strong___3sC58")
             change_raw = await page.inner_text(".row___1PIPI")
 
@@ -59,7 +69,8 @@ async def get_data():
 
 def send_msg(text):
     if not TOKEN or not CHAT_ID:
-        print("❌ FAILED: Missing TELEGRAM_TOKEN or TELEGRAM_CHAT_ID environment variables.")
+        # Added print for debugging secrets
+        print(f"❌ DEBUG: TOKEN exists: {bool(TOKEN)}, CHAT_ID exists: {bool(CHAT_ID)}")
         return
         
     chat_ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
@@ -76,7 +87,7 @@ async def main():
         send_msg(report)
         print(f"✅ Final Result: {price} | {change}")
     else:
-        print("😴 Weekend skip.")
+        print("😴 Weekend.")
 
 if __name__ == "__main__":
     asyncio.run(main())
