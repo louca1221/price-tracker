@@ -44,31 +44,40 @@ async def get_data():
                 if (loginBtn) loginBtn.click();
             }''')
 
-            # 2. Fill Credentials (HUMAN SIMULATION)
-            print("📝 Entering credentials (Human Speed)...")
-            email_selector = 'input[type="email"], input[placeholder*="Email"]'
-            await page.wait_for_selector(email_selector, state="visible", timeout=15000)
+            # 2. Fill Credentials (BYPASS INTERCEPTION)
+            print("📝 Entering credentials via direct focus...")
+            email_selector = 'input[type="email"], input[placeholder*="Email"], #account'
+            await page.wait_for_selector(email_selector, state="attached", timeout=15000)
 
-            # Focus and type to trigger the site's internal validation
-            await page.locator(email_selector).first.click()
-            await page.keyboard.type(SMM_EMAIL, delay=100)
-            
-            await page.locator('input[type="password"]').first.click()
-            await page.keyboard.type(SMM_PASSWORD, delay=100)
+            # Focus and type using JS to bypass the 'intercepts pointer events' error
+            await page.evaluate(f'''(e, p) => {{
+                const emailInput = document.querySelector('input[type="email"], input[placeholder*="Email"], #account');
+                const passInput = document.querySelector('input[type="password"]');
+                
+                if (emailInput) {{
+                    emailInput.focus();
+                    emailInput.value = e;
+                    emailInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                }}
+                if (passInput) {{
+                    passInput.focus();
+                    passInput.value = p;
+                    passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                }}
+            }}''', SMM_EMAIL, SMM_PASSWORD)
 
-            # 3. Submit with a physical click simulation
+            # 3. Submit with a Force Click
             print("⏳ Submitting login...")
-            # We target the specific red 'Sign in' button from your screenshot
             submit_btn = page.locator('button:has-text("Sign in"), .ant-btn-primary').first
+            # force=True ignores the fact that other elements are 'intercepting'
             await submit_btn.click(force=True)
             
-            # Wait for the modal to disappear
+            # Wait for the login modal to disappear
             try:
                 await page.wait_for_selector(".ant-modal", state="hidden", timeout=15000)
                 print("✅ Login successful.")
             except:
-                print("⚠️ Login might have failed. Checking screenshot...")
-                await page.screenshot(path="login_debug.png")
+                print("⚠️ Modal still active. Checking login status...")
 
             # 4. Re-navigate to ensure logged-in data is visible
             print(f"🚀 Refreshing data page...")
