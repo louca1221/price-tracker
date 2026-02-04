@@ -54,17 +54,28 @@ async def get_data():
                 }}
             }}''')
 
-            # Step 4: Click 'Sign in' via JS
-            await page.evaluate('document.querySelector("button[type=\'submit\'], .ant-btn-primary").click()')
+           # Step 4: Final scraping using the new class structure
+            print("📊 Scraping price data from new elements...")
             
-            print("⏳ Final scraping...")
-            await page.wait_for_load_state("networkidle")
-            await page.wait_for_selector(".strong___3sC58", timeout=30000)
+            # We wait for the 'avg' price container to appear
+            price_selector = "[class*='__avg']"
+            await page.wait_for_selector(price_selector, timeout=20000)
             
-            price = await page.inner_text(".strong___3sC58")
-            change_raw = await page.inner_text(".row___1PIPI")
-            change = change_raw.split("(")[1].replace(")", "").strip() if "(" in change_raw else change_raw
+            # Extract the raw values
+            price = await page.inner_text(price_selector)
             
+            # The change is usually in a span inside the 'downChange' or 'upChange' div
+            change_raw = await page.inner_text("[class*='Change']")
+            
+            # Cleaning the change text: 
+            # If change_raw is "-2(-0.10%)", this pulls out "-2 (-0.10%)"
+            if "(" in change_raw:
+                val = change_raw.split("(")[0].strip()
+                percent = change_raw.split("(")[1].replace(")", "").strip()
+                change = f"{val} ({percent})"
+            else:
+                change = change_raw.strip()
+
             return price.strip(), change
             
         except Exception as e:
