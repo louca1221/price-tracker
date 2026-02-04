@@ -30,10 +30,10 @@ jobs:
           SMM_PASSWORD: ${{ secrets.SMM_PASSWORD }}
         run: python test.py
 
-      - name: Upload Error Screenshot
-        if: failure()
+      - name: Upload Debug Screenshot
+        if: always() # <--- FORCE this to run even on crash
         uses: actions/upload-artifact@v4
         with:
           name: error-debug
           path: error_screenshot.png
-          retention-days: 1
+          if-no-files-found: ignore # Prevents the step itself from failing
