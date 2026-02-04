@@ -24,8 +24,8 @@ jobs:
 
       - name: Run tracker
         env:
-          TOKEN: ${{ secrets.TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
+          TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SMM_EMAIL: ${{ secrets.SMM_EMAIL }}
           SMM_PASSWORD: ${{ secrets.SMM_PASSWORD }}
         run: python test.py
