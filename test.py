@@ -1,41 +1,36 @@
-import requests
-from datetime import datetime
 import os
-from bs4 import BeautifulSoup
+import asyncio
+from playwright.async_api import async_playwright
+from datetime import datetime
 
-# --- CONFIG ---
-TOKEN = os.getenv("TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+# CONFIG
+SMM_EMAIL = os.getenv("SMM_EMAIL")
+SMM_PASSWORD = os.getenv("SMM_PASSWORD")
 URL = "https://www.metal.com/Lithium/201906260003"
 
-def get_data():
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    
-    try:
-        response = requests.get(URL, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
+async def get_smm_data():
+    async with async_playwright() as p:
+        # 1. Launch Browser
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
         
-        # 1. Get the Price
-        price_el = soup.find("span", class_="strong___3sC58")
-        price = price_el.text.strip() if price_el else "N/A"
+        # 2. Go to Login (adjust URL if SMM has a specific /login page)
+        await page.goto(URL)
         
-        # 2. Get the Change and split it
-        change_el = soup.find("div", class_="row___1PIPI")
-        if change_el:
-            change_text = change_el.text.strip()
-            if "(" in change_text:
-                change = change_text.split("(")[1].replace(")", "").strip()
-            else:
-                change = change_text
-        else:
-            change = "N/A"
-            
-        return price, change
-            
-    except Exception as e:
-        return f"Error: {e}", "Error"
+        # 3. Handle Login
+        # Note: You may need to click a 'Login' button first to see these fields
+        await page.fill('input[type="email"]', SMM_EMAIL) 
+        await page.fill('input[type="password"]', SMM_PASSWORD)
+        await page.click('button[type="submit"]')
+        
+        # 4. Wait for price to load
+        await page.wait_for_selector(".strong___3sC58")
+        
+        price = await page.inner_text(".strong___3sC58")
+        change_text = await page.inner_text(".row___1PIPI")
+        
+        await browser.close()
+        return price.strip(), change_text.strip()
 
 def send_msg(text):
     # 1. Get the raw string from GitHub Secrets
