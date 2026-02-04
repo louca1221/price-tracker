@@ -1,6 +1,42 @@
+import os
+import asyncio
+import requests
+from datetime import datetime
+from playwright.async_api import async_playwright
+
+# --- CONFIG (Maps to GitHub Secrets) ---
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+SMM_EMAIL = os.getenv("SMM_EMAIL")
+SMM_PASSWORD = os.getenv("SMM_PASSWORD")
+URL = "https://www.metal.com/Lithium/201906260003"
+
+def send_msg(text):
+    """Sends the report to Telegram and prints diagnostic info."""
+    if not TOKEN or not CHAT_ID:
+        print("❌ FAILED: Missing TELEGRAM_TOKEN or TELEGRAM_CHAT_ID")
+        return
+
+    chat_ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
+    for chat_id in chat_ids:
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        try:
+            response = requests.post(url, data={"chat_id": chat_id, "text": text}, timeout=15)
+            result = response.json()
+            
+            if result.get("ok"):
+                print(f"✅ Telegram: Message sent to {chat_id}")
+            else:
+                # This reveals if the chat_id is wrong or the bot isn't started
+                print(f"❌ Telegram Error for {chat_id}: {result.get('description')}")
+        except Exception as e:
+            print(f"❌ Network Error: {e}")
+
 async def get_data():
+    """Scrapes Lithium price after bypassing Ant-Design overlays."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+        # Use a realistic User-Agent to avoid headless detection
         context = await browser.new_context(
             viewport={'width': 1280, 'height': 800},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -19,12 +55,11 @@ async def get_data():
                 if (loginBtn) loginBtn.click();
             }''')
 
-            # 2. Fill Credentials (FIXED: Arguments passed as a single list)
+            # 2. Fill Credentials via JS focus/value (Bypasses 'intercepts pointer events')
             print("📝 Entering credentials via direct focus...")
             email_selector = 'input[type="email"], input[placeholder*="Email"], #account'
             await page.wait_for_selector(email_selector, state="attached", timeout=15000)
 
-            # [SMM_EMAIL, SMM_PASSWORD] is the single 'arg' required by evaluate
             await page.evaluate('''([e, p]) => {
                 const emailInput = document.querySelector('input[type="email"], input[placeholder*="Email"], #account');
                 const passInput = document.querySelector('input[type="password"]');
@@ -40,22 +75,23 @@ async def get_data():
                 }
             }''', [SMM_EMAIL, SMM_PASSWORD])
 
-            # 3. Submit with Force Click to bypass the row/label interception
+            # 3. Submit with Force Click
             print("⏳ Submitting login...")
             submit_btn = page.locator('button:has-text("Sign in"), .ant-btn-primary').first
             await submit_btn.click(force=True)
             
-            # 4. Wait for modal to clear and re-navigate
+            # Wait for modal to clear
             try:
                 await page.wait_for_selector(".ant-modal", state="hidden", timeout=15000)
-                print("✅ Login successful.")
+                print("✅ Login modal closed.")
             except:
-                print("⚠️ Modal still active, attempting re-navigation...")
+                print("⚠️ Modal still active, attempting refresh...")
 
+            # 4. Refresh to view logged-in price
             await page.goto(URL, wait_until="networkidle")
             await page.wait_for_timeout(5000) 
 
-            # 5. Extract Data using partial class matches
+            # 5. Extract Price and Change from dynamic divs
             print("📊 Extracting data...")
             price_locator = page.locator("div[class*='__avg']").first
             await price_locator.wait_for(state="visible", timeout=20000)
@@ -64,6 +100,7 @@ async def get_data():
             wrap_locator = page.locator("div[class*='PriceWrap']").first
             full_text = await wrap_locator.inner_text()
             
+            # Extract change by removing the price from the full string
             clean_full = full_text.replace('\n', ' ').strip()
             change = clean_full.replace(price.strip(), "").strip()
 
@@ -75,3 +112,25 @@ async def get_data():
             raise e
         finally:
             await browser.close()
+
+async def main():
+    if datetime.now().weekday() < 5:
+        try:
+            val_price, val_change = await get_data()
+            now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
+            report = (
+                f"📅 Date: {now_str}\n"
+                f"📦 Spodumene Concentrate Index\n"
+                f"💰 Price: {val_price} USD/mt\n"
+                f"📈 Change: {val_change}"
+            )
+            send_msg(report)
+            print(f"✅ FINAL: {val_price} | {val_change}")
+        except Exception as e:
+            # Send error details to Telegram to aid debugging
+            send_msg(f"❌ Scrape failed: {str(e)[:100]}")
+    else:
+        print("😴 Weekend skip.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
