@@ -18,34 +18,46 @@ async def get_data():
         page = await context.new_page()
         
         try:
-            print(f"🌐 Opening {URL}...")
+            print(f"🌐 Navigating to {URL}...")
             await page.goto(URL, wait_until="networkidle", timeout=60000)
             
-            # Step 1: Open Login via JS (Bypasses overlays)
-            print("🔑 Triggering Login Modal...")
-            await page.evaluate('document.querySelector(".signInButton, text=\'Sign In\'").click()')
-            
-            # Step 2: Wait for modal to be fully present
-            # Your screenshot shows the modal is there; we wait for the input specifically
-            email_field = page.locator('input[type="email"], input[placeholder*="Email"]').first
-            await email_field.wait_for(state="attached", timeout=15000)
+            # Step 1: Use raw JS to find the text "Sign In" and click it
+            # This logic works in every browser because it doesn't use Playwright selectors
+            print("🔑 Brute-forcing Login Modal...")
+            await page.evaluate('''() => {
+                // Find every element that might be a button or link
+                const elements = document.querySelectorAll('div, span, a, button');
+                for (const el of elements) {
+                    if (el.textContent.trim() === 'Sign In') {
+                        el.click(); // Trigger the click directly
+                        return;
+                    }
+                }
+            }''')
 
-            # Step 3: Fill using JS to avoid "Intercepted Pointer" errors
-            print("📝 Filling credentials via JS...")
+            # Step 2: Wait for the login form fields to exist
+            print("📝 Waiting for login form...")
+            email_input = page.locator('input[type="email"], input[placeholder*="Email"]').first
+            await email_input.wait_for(state="attached", timeout=15000)
+
+            # Step 3: Fill using JavaScript (Bypasses "intercepted pointer" errors)
             await page.evaluate(f'''() => {{
                 const email = document.querySelector('input[type="email"], input[placeholder*="Email"]');
                 const pass = document.querySelector('input[type="password"]');
-                if(email) email.value = "{SMM_EMAIL}";
-                if(pass) pass.value = "{SMM_PASSWORD}";
-                // Manually trigger 'input' event so the site knows we typed
-                email.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                pass.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                if (email) {{
+                    email.value = "{SMM_EMAIL}";
+                    email.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                }}
+                if (pass) {{
+                    pass.value = "{SMM_PASSWORD}";
+                    pass.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                }}
             }}''')
 
-            # Step 4: Click 'Sign in' button
-            await page.evaluate('document.querySelector("button.ant-btn-primary, button[type=\'submit\']").click()')
+            # Step 4: Click 'Sign in' via JS
+            await page.evaluate('document.querySelector("button[type=\'submit\'], .ant-btn-primary").click()')
             
-            print("⏳ Waiting for redirection...")
+            print("⏳ Final scraping...")
             await page.wait_for_load_state("networkidle")
             await page.wait_for_selector(".strong___3sC58", timeout=30000)
             
