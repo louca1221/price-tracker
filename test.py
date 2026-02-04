@@ -20,14 +20,17 @@ async def get_data():
         try:
             print(f"🌐 Navigating to {URL}...")
             await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(3000) # Settle time
+            await page.wait_for_timeout(3000)
 
             # --- STEP 1: ACCEPT COOKIES ---
-            cookie_btn = page.locator('button:has-text("Accept"), button:has-text("Agree"), .cookie-accept-btn').filter(visible=True).first
-            if await cookie_btn.is_visible():
-                print("🍪 Accepting cookies...")
-                await cookie_btn.click()
-                await page.wait_for_timeout(1000)
+            cookie_selectors = ['button:has-text("Accept")', 'button:has-text("Agree")', '.cookie-accept-btn', '#onetrust-accept-btn-handler']
+            for sel in cookie_selectors:
+                btn = page.locator(sel).first
+                if await btn.is_visible():
+                    print("🍪 Found cookie banner. Accepting...")
+                    await btn.click()
+                    await page.wait_for_timeout(1000)
+                    break
 
             # --- STEP 2: HANDLE LOGIN ---
             login_selectors = ['text="Sign In"', 'button:has-text("Login")', '.login-btn', 'span:has-text("Sign In")']
@@ -38,7 +41,7 @@ async def get_data():
                     await btn.click()
                     break
 
-            # Fill credentials
+            # Fill credentials (handling potential strict mode errors with .first)
             await page.wait_for_selector('input[type="email"], input[placeholder*="Email"]', timeout=15000)
             await page.locator('input[type="email"], input[placeholder*="Email"]').first.fill(SMM_EMAIL)
             await page.locator('input[type="password"], input[placeholder*="Password"]').first.fill(SMM_PASSWORD)
@@ -63,7 +66,7 @@ async def get_data():
 
 def send_msg(text):
     if not TOKEN or not CHAT_ID:
-        print("❌ Missing TOKEN or CHAT_ID in environment.")
+        print("❌ Missing TOKEN or CHAT_ID secrets.")
         return
     chat_ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
     for chat_id in chat_ids:
