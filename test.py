@@ -1,81 +1,77 @@
 import os
 import asyncio
-from playwright.async_api import async_playwright
+import requests
 from datetime import datetime
+from playwright.async_api import async_playwright
 
-# CONFIG
+# --- CONFIG ---
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 SMM_EMAIL = os.getenv("SMM_EMAIL")
 SMM_PASSWORD = os.getenv("SMM_PASSWORD")
 URL = "https://www.metal.com/Lithium/201906260003"
 
-async def get_smm_data():
+async def get_data():
     async with async_playwright() as p:
-        # 1. Launch Browser
+        # Launch headless browser
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        
-        # 2. Go to Login (adjust URL if SMM has a specific /login page)
-        await page.goto(URL)
-        
-        # 3. Handle Login
-        # Note: You may need to click a 'Login' button first to see these fields
-        await page.fill('input[type="email"]', SMM_EMAIL) 
-        await page.fill('input[type="password"]', SMM_PASSWORD)
-        await page.click('button[type="submit"]')
-        
-        # 4. Wait for price to load
-        await page.wait_for_selector(".strong___3sC58")
-        
-        price = await page.inner_text(".strong___3sC58")
-        change_text = await page.inner_text(".row___1PIPI")
-        
-        await browser.close()
-        return price.strip(), change_text.strip()
+        context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        page = await context.new_page()
+
+        try:
+            # 1. Navigate to the page
+            await page.goto(URL, wait_until="networkidle")
+
+            # 2. Check if login is required (Looks for 'Sign In' text or login button)
+            # If the site redirected you to login, fill the fields.
+            if await page.get_by_text("Sign In").is_visible():
+                print("Logging in...")
+                # Adjust these selectors if the ID/Name changes on the site
+                await page.fill('input[type="email"], input[placeholder*="Email"]', SMM_EMAIL)
+                await page.fill('input[type="password"], input[placeholder*="Password"]', SMM_PASSWORD)
+                await page.click('button:has-text("Sign In"), button[type="submit"]')
+                await page.wait_for_load_state("networkidle")
+
+            # 3. Wait for the price elements to appear
+            await page.wait_for_selector(".strong___3sC58", timeout=15000)
+            
+            price_raw = await page.inner_text(".strong___3sC58")
+            change_raw = await page.inner_text(".row___1PIPI")
+
+            # Cleaning the split logic as requested
+            change = change_raw.split("(")[1].replace(")", "").strip() if "(" in change_raw else change_raw
+            
+            await browser.close()
+            return price_raw.strip(), change
+            
+        except Exception as e:
+            await browser.close()
+            return f"Error: {str(e)[:50]}...", "Error"
 
 def send_msg(text):
-    # 1. Get the raw string from GitHub Secrets
-    raw_ids = os.getenv("CHAT_ID")
-    
-    if not raw_ids:
-        print("❌ Error: CHAT_ID secret is empty or not found.")
-        return
-
-    # 2. Split by comma and CLEAN every ID (removes spaces/tabs/newlines)
-    # This turns "123, 456" into ["123", "456"]
-    chat_ids = [cid.strip() for cid in raw_ids.split(",") if cid.strip()]
-    
-    print(f"DEBUG: Attempting to send to {len(chat_ids)} IDs: {chat_ids}")
-
+    if not CHAT_ID: return
+    chat_ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
     for chat_id in chat_ids:
-        base_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": text
-        }
-        try:
-            response = requests.post(base_url, data=payload, timeout=10)
-            if response.status_code == 200:
-                print(f"✅ Successfully sent to: {chat_id}")
-            else:
-                print(f"⚠️ Telegram rejected {chat_id}: {response.text}")
-        except Exception as e:
-            print(f"❌ Network error for {chat_id}: {e}")
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        requests.post(url, data={"chat_id": chat_id, "text": text})
 
+async def main():
+    # Only run on weekdays
+    if datetime.now().weekday() < 5:
+        now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
+        price, change = await get_data()
 
-# --- EXECUTION ---
-# Only run if it's a weekday (0=Mon, 4=Fri)
-if datetime.now().weekday() < 5:
-    now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
-    price, change = get_data()
+        message = (
+            f"📅 Date: {now_str}\n"
+            f"📦 Spodumene Concentrate Index (CIF China)\n"
+            f"💰 Price: {price} USD/mt\n"
+            f"📈 Change: {change}"
+        )
 
-    message = (
-        f"📅 Date: {now_str}\n"
-        f"📦 Spodumene Concentrate Index (CIF China)\n"
-        f"💰 Price: {price} USD/mt\n"
-        f"📈 Change: {change}"
-    )
+        send_msg(message)
+        print(f"Report Sent: {price} | {change}")
+    else:
+        print("Weekend: Skipping.")
 
-    send_msg(message)
-    print(f"Report Sent: {price} | {change}")
-else:
-    print("Weekend skip: No report sent.")
+if __name__ == "__main__":
+    asyncio.run(main())
