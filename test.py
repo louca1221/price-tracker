@@ -1,28 +1,3 @@
-import os
-import asyncio
-import requests
-from datetime import datetime
-from playwright.async_api import async_playwright
-
-# --- CONFIG ---
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-SMM_EMAIL = os.getenv("SMM_EMAIL")
-SMM_PASSWORD = os.getenv("SMM_PASSWORD")
-URL = "https://www.metal.com/Lithium/201906260003"
-
-def send_msg(text):
-    if not TOKEN or not CHAT_ID:
-        print("❌ FAILED: Missing TELEGRAM_TOKEN or TELEGRAM_CHAT_ID")
-        return
-    chat_ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
-    for chat_id in chat_ids:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        try:
-            requests.post(url, data={"chat_id": chat_id, "text": text}, timeout=15)
-        except Exception as e:
-            print(f"❌ Telegram Error: {e}")
-
 async def get_data():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -36,7 +11,7 @@ async def get_data():
             print(f"🌐 Navigating to {URL}...")
             await page.goto(URL, wait_until="networkidle", timeout=60000)
             
-            # 1. Open Login Modal via JS
+            # 1. Trigger Login Modal via JS
             print("🔑 Opening Login Modal...")
             await page.evaluate('''() => {
                 const elements = document.querySelectorAll('div, span, a, button');
@@ -44,61 +19,52 @@ async def get_data():
                 if (loginBtn) loginBtn.click();
             }''')
 
-            # 2. Fill Credentials (BYPASS INTERCEPTION)
+            # 2. Fill Credentials (FIXED: Arguments passed as a single list)
             print("📝 Entering credentials via direct focus...")
             email_selector = 'input[type="email"], input[placeholder*="Email"], #account'
             await page.wait_for_selector(email_selector, state="attached", timeout=15000)
 
-            # Focus and type using JS to bypass the 'intercepts pointer events' error
-            await page.evaluate(f'''(e, p) => {{
+            # [SMM_EMAIL, SMM_PASSWORD] is the single 'arg' required by evaluate
+            await page.evaluate('''([e, p]) => {
                 const emailInput = document.querySelector('input[type="email"], input[placeholder*="Email"], #account');
                 const passInput = document.querySelector('input[type="password"]');
-                
-                if (emailInput) {{
+                if (emailInput) {
                     emailInput.focus();
                     emailInput.value = e;
-                    emailInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                }}
-                if (passInput) {{
+                    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (passInput) {
                     passInput.focus();
                     passInput.value = p;
-                    passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                }}
-            }}''', SMM_EMAIL, SMM_PASSWORD)
+                    passInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }''', [SMM_EMAIL, SMM_PASSWORD])
 
-            # 3. Submit with a Force Click
+            # 3. Submit with Force Click to bypass the row/label interception
             print("⏳ Submitting login...")
             submit_btn = page.locator('button:has-text("Sign in"), .ant-btn-primary').first
-            # force=True ignores the fact that other elements are 'intercepting'
             await submit_btn.click(force=True)
             
-            # Wait for the login modal to disappear
+            # 4. Wait for modal to clear and re-navigate
             try:
                 await page.wait_for_selector(".ant-modal", state="hidden", timeout=15000)
                 print("✅ Login successful.")
             except:
-                print("⚠️ Modal still active. Checking login status...")
+                print("⚠️ Modal still active, attempting re-navigation...")
 
-            # 4. Re-navigate to ensure logged-in data is visible
-            print(f"🚀 Refreshing data page...")
             await page.goto(URL, wait_until="networkidle")
             await page.wait_for_timeout(5000) 
 
-            # 5. Extract Data using your new <div> structure
+            # 5. Extract Data using partial class matches
             print("📊 Extracting data...")
-            
-            # Target the specific 'avg' class
             price_locator = page.locator("div[class*='__avg']").first
             await price_locator.wait_for(state="visible", timeout=20000)
             price = await price_locator.inner_text()
             
-            # Target the parent wrap to get the full change text
             wrap_locator = page.locator("div[class*='PriceWrap']").first
             full_text = await wrap_locator.inner_text()
             
-            # Clean up the output
             clean_full = full_text.replace('\n', ' ').strip()
-            # Remove the price from the full string to leave just the change
             change = clean_full.replace(price.strip(), "").strip()
 
             return price.strip(), change
@@ -109,24 +75,3 @@ async def get_data():
             raise e
         finally:
             await browser.close()
-
-async def main():
-    if datetime.now().weekday() < 5:
-        try:
-            val_price, val_change = await get_data()
-            now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
-            report = (
-                f"📅 Date: {now_str}\n"
-                f"📦 Spodumene Concentrate Index\n"
-                f"💰 Price: {val_price} USD/mt\n"
-                f"📈 Change: {val_change}"
-            )
-            send_msg(report)
-            print(f"✅ SUCCESS: {val_price} | {val_change}")
-        except Exception as e:
-            send_msg(f"❌ Scrape failed: {str(e)[:100]}")
-    else:
-        print("😴 Weekend skip.")
-
-if __name__ == "__main__":
-    asyncio.run(main())
