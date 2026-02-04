@@ -1,18 +1,19 @@
 name: Daily Price Report
 
 on:
-  workflow_dispatch:      # Allows you to run it manually to test
-  repository_dispatch:        # <--- THIS IS WHAT CRON-JOB.ORG HITS
-    types: [trigger-rns]
+  schedule:
+    - cron: '0 4 * * 1-5'
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
@@ -20,7 +21,7 @@ jobs:
         run: |
           pip install playwright requests beautifulsoup4
           python -m playwright install --with-deps chromium
-      
+
       - name: Run tracker
         env:
           TOKEN: ${{ secrets.TOKEN }}
@@ -28,3 +29,11 @@ jobs:
           SMM_EMAIL: ${{ secrets.SMM_EMAIL }}
           SMM_PASSWORD: ${{ secrets.SMM_PASSWORD }}
         run: python test.py
+
+      - name: Upload Error Screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-debug
+          path: error_screenshot.png
+          retention-days: 1
