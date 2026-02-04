@@ -49,37 +49,57 @@ async def get_data():
             
             # 1. Trigger Login Modal via JS
             print("🔑 Opening Login Modal...")
-            await page.evaluate('''() => {
-                const elements = document.querySelectorAll('div, span, a, button');
-                const loginBtn = Array.from(elements).find(el => el.textContent.trim() === 'Sign In');
-                if (loginBtn) loginBtn.click();
-            }''')
-
-            # 2. Fill Credentials via JS focus/value (Bypasses 'intercepts pointer events')
-            print("📝 Entering credentials via direct focus...")
+            # 1. Check if we are already on a login page before clicking
+            print("🧐 Checking if login is already open...")
             email_selector = 'input[type="email"], input[placeholder*="Email"], #account'
-            await page.wait_for_selector(email_selector, state="attached", timeout=15000)
-
-            await page.evaluate('''([e, p]) => {
-                const emailInput = document.querySelector('input[type="email"], input[placeholder*="Email"], #account');
-                const passInput = document.querySelector('input[type="password"]');
-                if (emailInput) {
-                    emailInput.focus();
-                    emailInput.value = e;
-                    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                if (passInput) {
-                    passInput.focus();
-                    passInput.value = p;
-                    passInput.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }''', [SMM_EMAIL, SMM_PASSWORD])
-
-            # 3. Submit and Wait for the URL to change or the page to load
-            print("⏳ Submitting login and waiting for session...")
             
-            # We click and wait for the "networkidle" state to ensure cookies are saved
-            await page.locator('button:has-text("Sign in"), .ant-btn-primary').first.click(force=True)
+            # Check for the field without waiting/timing out
+            is_login_already_open = await page.locator(email_selector).count() > 0
+
+            if not is_login_already_open:
+                print("🔑 No login found. Triggering Modal...")
+                await page.evaluate('''() => {
+                    const elements = document.querySelectorAll('div, span, a, button');
+                    const loginBtn = Array.from(elements).find(el => el.textContent.trim() === 'Sign In');
+                    if (loginBtn) loginBtn.click();
+                }''')
+            else:
+                print("✅ Login already open. Skipping click.")
+
+            # 2. Proceed to fill credentials as normal
+            print("📝 Filling fields...")
+            await page.wait_for_selector(email_selector, state="visible", timeout=10000)
+            # ... rest of your fill logic
+            # 2. Fill Credentials (Slow-Type Human Simulation)
+            print("📝 Entering credentials character-by-character...")
+            email_selector = 'input[type="email"], input[placeholder*="Email"], #account'
+            pass_selector = 'input[type="password"]'
+            
+            # Wait for fields to be interactable
+            await page.wait_for_selector(email_selector, state="visible", timeout=15000)
+
+            # --- EMAIL ---
+            # Click first to ensure focus
+            await page.click(email_selector)
+            # Clear existing text just in case
+            await page.keyboard.press("Control+A")
+            await page.keyboard.press("Backspace")
+            # Type slowly (100ms per key) to trigger site validation
+            await page.keyboard.type(SMM_EMAIL, delay=100)
+
+            # --- PASSWORD ---
+            await page.click(pass_selector)
+            await page.keyboard.press("Control+A")
+            await page.keyboard.press("Backspace")
+            await page.keyboard.type(SMM_PASSWORD, delay=100)
+
+            # 3. Small pause to let the 'Sign In' button turn red/active
+            await page.wait_for_timeout(1000)
+
+            print("⏳ Submitting login...")
+            # We target the specific button text from your screenshot
+            submit_btn = page.locator('button:has-text("Sign in"), .ant-btn-primary').first
+            await submit_btn.click()
             
             # Wait for the login modal to disappear OR the price to appear
             try:
