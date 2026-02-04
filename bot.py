@@ -102,17 +102,19 @@ async def get_data():
             else:
                 print("✅ Already logged in via session file!")
 
-            # --- 4. DATA EXTRACTION ---
-            print("📊 Looking for price data...")
-            price_locator = page.locator(price_selector).first
+            # --- 4. DATA EXTRACTION (Precise) ---
+            print("📊 Extracting price...")
+            price_locator = page.locator("div[class*='__avg']").first
             await price_locator.wait_for(state="visible", timeout=30000)
             price = await price_locator.inner_text()
             
-            wrap_locator = page.locator("div[class*='PriceWrap']").first
-            full_text = await wrap_locator.inner_text()
+            # Target ONLY the change div to avoid grabbing the date again
+            print("📊 Extracting change...")
+            change_locator = page.locator("div[class*='Change']").first
+            change_raw = await change_locator.inner_text()
             
-            clean_full = full_text.replace('\n', ' ').strip()
-            change = clean_full.replace(price.strip(), "").strip()
+            # Clean up the change text (removes extra lines/spaces)
+            change = change_raw.replace('\n', ' ').strip()
 
             return price.strip(), change
             
@@ -127,13 +129,19 @@ async def main():
     if datetime.now().weekday() < 5:
         try:
             val_price, val_change = await get_data()
+            
+            # --- EMOJI TOGGLE LOGIC ---
+            # If the change starts with '-', use 📉, otherwise use 📈
+            emoji = "📉" if val_change.startswith("-") else "📈"
+            
             now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
             report = (
                 f"📅 Date: {now_str}\n"
                 f"📦 Spodumene Concentrate Index\n"
                 f"💰 Price: {val_price} USD/mt\n"
-                f"📈 Change: {val_change}"
+                f"{emoji} Change: {val_change}"
             )
+            
             send_msg(report)
             print(f"✅ FINAL: {val_price} | {val_change}")
         except Exception as e:
