@@ -6,34 +6,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  run-tracker:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-
-      - name: Install dependencies
+      - name: Install
         run: |
           pip install playwright requests beautifulsoup4
           python -m playwright install --with-deps chromium
-
-      - name: Run tracker
+      - name: Run
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SMM_EMAIL: ${{ secrets.SMM_EMAIL }}
           SMM_PASSWORD: ${{ secrets.SMM_PASSWORD }}
         run: python test.py
-
-      - name: Upload Debug Screenshot
-        if: always() # <--- FORCE this to run even on crash
+      - name: Screenshot on Failure
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: error-debug
+          name: debug-image
           path: error_screenshot.png
-          if-no-files-found: ignore # Prevents the step itself from failing
