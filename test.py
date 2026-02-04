@@ -4,7 +4,7 @@ import requests
 from datetime import datetime
 from playwright.async_api import async_playwright
 
-# --- CONFIG ---
+# --- CONFIG (Check these names in your Secrets!) ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SMM_EMAIL = os.getenv("SMM_EMAIL")
@@ -16,78 +16,64 @@ async def get_data():
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(viewport={'width': 1280, 'height': 800})
         page = await context.new_page()
-
+        
         try:
-            print(f"🌐 Navigating to {URL}...")
+            print(f"🌐 Opening {URL}...")
             await page.goto(URL, wait_until="networkidle", timeout=60000)
             
-            # --- STEP 1: REMOVE BLOCKING MODALS ---
-            await page.evaluate('() => { document.querySelectorAll(".ant-modal-mask, .ant-modal-wrap, .ant-modal").forEach(el => el.remove()); }')
+            # Press escape to clear initial popups
             await page.keyboard.press("Escape")
 
-            # --- STEP 2: OPEN LOGIN FORM ---
+            # Try to find and click Sign In
+            print("🔍 Looking for Sign In button...")
             login_btn = page.locator('text="Sign In", .signInButton').first
-            if await login_btn.is_visible():
-                print("🔑 Clicking Sign In...")
-                await login_btn.dispatch_event("click")
-                # Wait for the login form to actually exist in the DOM
-                await page.wait_for_timeout(3000)
-
-            # --- STEP 3: FILL LOGIN (Aggressive Search) ---
-            print("📝 Looking for email field...")
-            # We use a broader selector for the email/password fields
-            email_field = page.locator('input[type="email"], input[placeholder*="Email"], input[name*="mail"]').first
-            password_field = page.locator('input[type="password"], input[placeholder*="Pass"]').first
+            # We use dispatch_event to click through blocking modals
+            await login_btn.dispatch_event("click")
             
-            # Wait for it to be attached (not necessarily visible yet)
-            await email_field.wait_for(state="attached", timeout=20000)
+            # Wait for the email field to appear
+            print("📝 Waiting for login form...")
+            email_field = page.locator('input[type="email"], input[placeholder*="Email"]').first
+            await email_field.wait_for(state="attached", timeout=15000)
             
             await email_field.fill(SMM_EMAIL)
-            await password_field.fill(SMM_PASSWORD)
+            await page.locator('input[type="password"]').first.fill(SMM_PASSWORD)
+            await page.locator('button[type="submit"], .submit-btn').first.dispatch_event("click")
             
-            submit_btn = page.locator('button[type="submit"], button:has-text("Sign In"), .submit-btn').first
-            await submit_btn.dispatch_event("click")
-            
-            print("⏳ Waiting for login to complete...")
+            print("⏳ Waiting for price page...")
             await page.wait_for_load_state("networkidle")
-
-            # --- STEP 4: SCRAPE PRICE ---
-            await page.wait_for_selector(".strong___3sC58", timeout=30000)
+            await page.wait_for_selector(".strong___3sC58", timeout=20000)
+            
             price = await page.inner_text(".strong___3sC58")
             change_raw = await page.inner_text(".row___1PIPI")
-
             change = change_raw.split("(")[1].replace(")", "").strip() if "(" in change_raw else change_raw
             
-            await browser.close()
             return price.strip(), change
             
         except Exception as e:
+            # THIS IS CRITICAL: Save the image so we can see why it failed
+            print(f"❌ Error occurred: {e}")
             await page.screenshot(path="error_screenshot.png")
-            print(f"❌ Error Detail: {e}")
+            raise e # Tell GitHub the job failed
+        finally:
             await browser.close()
-            return "Error (Check Artifacts)", "Error"
 
 def send_msg(text):
     if not TOKEN or not CHAT_ID:
-        # Added print for debugging secrets
-        print(f"❌ DEBUG: TOKEN exists: {bool(TOKEN)}, CHAT_ID exists: {bool(CHAT_ID)}")
+        print(f"❌ SECRET ERROR: TOKEN={bool(TOKEN)}, CHAT_ID={bool(CHAT_ID)}")
         return
-        
-    chat_ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
-    for chat_id in chat_ids:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": chat_id, "text": text}, timeout=10)
+    for cid in CHAT_ID.split(","):
+        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
+                      data={"chat_id": cid.strip(), "text": text})
 
 async def main():
     if datetime.now().weekday() < 5:
-        now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
-        price, change = await get_data()
-        
-        report = f"📅 Date: {now_str}\n📦 Spodumene Index\n💰 Price: {price} USD/mt\n📈 Change: {change}"
-        send_msg(report)
-        print(f"✅ Final Result: {price} | {change}")
-    else:
-        print("😴 Weekend.")
+        try:
+            price, change = await get_data()
+            now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
+            send_msg(f"📅 {now_str}\n💰 Price: {price} USD/mt\n📈 Change: {change}")
+        except:
+            print("Job failed. Check artifacts.")
+            exit(1) # Force GitHub to show a red "Fail" status
 
 if __name__ == "__main__":
     asyncio.run(main())
