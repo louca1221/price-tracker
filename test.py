@@ -21,31 +21,33 @@ async def get_data():
             print(f"🌐 Navigating to {URL}...")
             await page.goto(URL, wait_until="networkidle", timeout=60000)
             
-            # 1. Try to clear any popups by pressing Escape
+            # --- STEP 1: CLEAR POPUPS/MODALS ---
+            # Your log showed 'ant-modal-wrap' was blocking the click.
+            # We try to press Escape and click any 'Close' icons found.
             await page.keyboard.press("Escape")
-            await page.wait_for_timeout(2000)
+            close_selectors = ['.ant-modal-close', '.close-btn', 'button:has-text("Close")']
+            for sel in close_selectors:
+                if await page.locator(sel).first.is_visible():
+                    await page.locator(sel).first.click(force=True)
+            
+            # --- STEP 2: HANDLE LOGIN ---
+            # We use 'force=True' to click even if an invisible layer is 'intercepting'
+            login_btn = page.locator('text="Sign In", .signInButton').first
+            print("🔑 Attempting to click Sign In...")
+            await login_btn.click(force=True, timeout=10000)
 
-            # 2. Find and FORCE click the login button
-            # 'force=True' ignores the 'intercepts pointer events' error
-            login_btn = page.locator('text="Sign In", .signInButton, button:has-text("Sign In")').first
-            
-            if await login_btn.is_visible():
-                print("🔑 Clicking login (Forced)...")
-                await login_btn.click(force=True) 
-            
-            # 3. Fill Credentials
-            # We wait for the input to be attached to the page
-            await page.wait_for_selector('input[type="email"], input[placeholder*="Email"]', state="attached", timeout=15000)
+            # Wait for the email input specifically
+            await page.wait_for_selector('input[type="email"], input[placeholder*="Email"]', timeout=15000)
             await page.locator('input[type="email"]').first.fill(SMM_EMAIL)
             await page.locator('input[type="password"]').first.fill(SMM_PASSWORD)
             
-            # Force click the final submit button too
+            # Force click the final submit button
             await page.locator('button[type="submit"], .submit-btn').first.click(force=True)
-            
-            # 4. Wait for redirection and price
             await page.wait_for_load_state("networkidle")
+
+            # --- STEP 3: SCRAPE ---
+            # After login, wait for the actual price to appear
             await page.wait_for_selector(".strong___3sC58", timeout=20000)
-            
             price = await page.inner_text(".strong___3sC58")
             change_raw = await page.inner_text(".row___1PIPI")
 
@@ -55,15 +57,18 @@ async def get_data():
             return price.strip(), change
             
         except Exception as e:
+            # Save screenshot so you can see the blocking element in GitHub Artifacts
             await page.screenshot(path="error_screenshot.png")
             print(f"❌ Error Detail: {e}")
             await browser.close()
             return "Error (Check Artifacts)", "Error"
 
 def send_msg(text):
+    # Ensure TOKEN and CHAT_ID actually exist before sending
     if not TOKEN or not CHAT_ID:
-        print("❌ Missing TOKEN or CHAT_ID secrets.")
+        print("❌ FAILED: Missing TOKEN or CHAT_ID environment variables.")
         return
+        
     chat_ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
     for chat_id in chat_ids:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -73,7 +78,14 @@ async def main():
     if datetime.now().weekday() < 5:
         now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
         price, change = await get_data()
-        report = f"📅 Date: {now_str}\n📦 Spodumene Index\n💰 Price: {price} USD/mt\n📈 Change: {change}"
+        
+        report = (
+            f"📅 Date: {now_str}\n"
+            f"📦 Spodumene Concentrate Index\n"
+            f"💰 Price: {price} USD/mt\n"
+            f"📈 Change: {change}"
+        )
+        
         send_msg(report)
         print(f"✅ Final Result: {price} | {change}")
     else:
