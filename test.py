@@ -4,103 +4,134 @@ import requests
 from datetime import datetime
 from playwright.async_api import async_playwright
 
-# --- CONFIG ---
+# --- CONFIG (Maps to GitHub Secrets) ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SMM_EMAIL = os.getenv("SMM_EMAIL")
 SMM_PASSWORD = os.getenv("SMM_PASSWORD")
 URL = "https://www.metal.com/Lithium/201906260003"
 
+def send_msg(text):
+    """Sends the final report or error logs to Telegram."""
+    if not TOKEN or not CHAT_ID:
+        print("❌ FAILED: Missing TELEGRAM_TOKEN or TELEGRAM_CHAT_ID")
+        return
+
+    chat_ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
+    for chat_id in chat_ids:
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        try:
+            requests.post(url, data={"chat_id": chat_id, "text": text}, timeout=15)
+        except Exception as e:
+            print(f"❌ Telegram Error: {e}")
+
 async def get_data():
+    """Main scraping logic using Playwright."""
     async with async_playwright() as p:
+        # Launching with a standard user-agent to avoid basic bot detection
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(viewport={'width': 1280, 'height': 800})
+        context = await browser.new_context(
+            viewport={'width': 1280, 'height': 800},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
         page = await context.new_page()
         
         try:
             print(f"🌐 Navigating to {URL}...")
             await page.goto(URL, wait_until="networkidle", timeout=60000)
             
-            # Step 1: Use raw JS to find the text "Sign In" and click it
-            # This logic works in every browser because it doesn't use Playwright selectors
-            print("🔑 Brute-forcing Login Modal...")
+            # 1. Trigger Login Modal via JS (Bypasses transparent overlays)
+            print("🔑 Opening Login Modal...")
             await page.evaluate('''() => {
-                // Find every element that might be a button or link
                 const elements = document.querySelectorAll('div, span, a, button');
-                for (const el of elements) {
-                    if (el.textContent.trim() === 'Sign In') {
-                        el.click(); // Trigger the click directly
-                        return;
-                    }
-                }
+                const loginBtn = Array.from(elements).find(el => el.textContent.trim() === 'Sign In');
+                if (loginBtn) loginBtn.click();
             }''')
 
-            # Step 2: Wait for the login form fields to exist
-            print("📝 Waiting for login form...")
-            email_input = page.locator('input[type="email"], input[placeholder*="Email"]').first
-            await email_input.wait_for(state="attached", timeout=15000)
+            # 2. Fill Credentials via JS (Bypasses "intercepted pointer" errors)
+            print("📝 Entering credentials...")
+            email_selector = 'input[type="email"], input[placeholder*="Email"]'
+            await page.wait_for_selector(email_selector, state="attached", timeout=15000)
 
-            # Step 3: Fill using JavaScript (Bypasses "intercepted pointer" errors)
-            await page.evaluate(f'''() => {{
+            await page.evaluate(f'''(e, p) => {{
                 const email = document.querySelector('input[type="email"], input[placeholder*="Email"]');
                 const pass = document.querySelector('input[type="password"]');
                 if (email) {{
-                    email.value = "{SMM_EMAIL}";
+                    email.value = e;
                     email.dispatchEvent(new Event('input', {{ bubbles: true }}));
                 }}
                 if (pass) {{
-                    pass.value = "{SMM_PASSWORD}";
+                    pass.value = p;
                     pass.dispatchEvent(new Event('input', {{ bubbles: true }}));
                 }}
-            }}''')
+            }}''', SMM_EMAIL, SMM_PASSWORD)
 
-           # Step 4: Final scraping using the new class structure
-            print("📊 Scraping price data from new elements...")
+            # 3. Submit and wait for modal to close
+            print("⏳ Submitting login...")
+            await page.evaluate('document.querySelector("button[type=\'submit\'], .ant-btn-primary").click()')
             
-            # We wait for the 'avg' price container to appear
-            price_selector = "[class*='__avg']"
-            await page.wait_for_selector(price_selector, timeout=20000)
+            # Wait for the login modal to disappear from the DOM
+            try:
+                await page.wait_for_selector(".ant-modal", state="hidden", timeout=10000)
+                print("✅ Login successful, modal closed.")
+            except:
+                print("⚠️ Modal still visible, forcing refresh...")
+
+            # 4. Re-navigate to refresh data with logged-in permissions
+            print(f"🚀 Refreshing data page...")
+            await page.goto(URL, wait_until="networkidle")
+            await page.wait_for_timeout(5000) # Buffer for price to render
+
+            # 5. Extract Price and Change using partial class matches
+            print("📊 Extracting data...")
             
-            # Extract the raw values
-            price = await page.inner_text(price_selector)
+            # Find the Average Price
+            price_locator = page.locator("div[class*='__avg']").first
+            await price_locator.wait_for(state="visible", timeout=20000)
+            price = await price_locator.inner_text()
             
-            # The change is usually in a span inside the 'downChange' or 'upChange' div
-            change_raw = await page.inner_text("[class*='Change']")
+            # Find the Change (Parent wrap contains both price and the change spans)
+            # We grab the text and subtract the price to get the remainder (the change)
+            wrap_locator = page.locator("div[class*='__price']").first
+            full_text = await wrap_locator.inner_text()
             
-            # Cleaning the change text: 
-            # If change_raw is "-2(-0.10%)", this pulls out "-2 (-0.10%)"
-            if "(" in change_raw:
-                val = change_raw.split("(")[0].strip()
-                percent = change_raw.split("(")[1].replace(")", "").strip()
-                change = f"{val} ({percent})"
-            else:
-                change = change_raw.strip()
+            # Clean up: Replace newlines and remove the price portion
+            clean_full = full_text.replace('\n', ' ').strip()
+            change = clean_full.replace(price.strip(), "").strip()
 
             return price.strip(), change
             
         except Exception as e:
+            # Save debug image to GitHub Artifacts
             await page.screenshot(path="error_screenshot.png")
-            print(f"❌ Automation Error: {e}")
+            print(f"❌ Scrape Error: {e}")
             raise e
         finally:
             await browser.close()
 
-def send_msg(text):
-    if not TOKEN or not CHAT_ID:
-        print("❌ Missing Secrets")
-        return
-    for chat_id in CHAT_ID.split(","):
-        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
-                      data={"chat_id": chat_id.strip(), "text": text})
-
 async def main():
+    # Only run on weekdays (Monday=0, Sunday=6)
     if datetime.now().weekday() < 5:
         try:
-            price, change = await get_data()
+            val_price, val_change = await get_data()
             now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
-            send_msg(f"📅 {now_str}\n💰 Price: {price} USD/mt\n📈 Change: {change}")
+            
+            report = (
+                f"📅 Date: {now_str}\n"
+                f"📦 Spodumene Concentrate Index\n"
+                f"💰 Price: {val_price} USD/mt\n"
+                f"📈 Change: {val_change}"
+            )
+            
+            send_msg(report)
+            print(f"✅ SUCCESS: {val_price} | {val_change}")
+            
         except Exception as e:
-            send_msg(f"❌ Scrape failed: {str(e)[:50]}")
+            error_msg = f"❌ Scrape failed: {str(e)[:100]}"
+            send_msg(error_msg)
+            print(error_msg)
+    else:
+        print("😴 Skipping: It's the weekend.")
 
 if __name__ == "__main__":
     asyncio.run(main())
