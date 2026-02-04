@@ -1,32 +1,34 @@
-name: Daily Price Report
-
-on:
-  schedule:
-    - cron: '0 4 * * 1-5'
-  workflow_dispatch:
-
 jobs:
-  run-tracker:
+  scrape:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- ADD THIS CACHE STEP ---
+      - name: Cache Playwright session
+        uses: actions/cache@v4
         with:
-          python-version: '3.9'
-      - name: Install
+          path: state.json
+          # This key tells GitHub to look for a 'state' file. 
+          # It uses the OS name so it doesn't get confused.
+          key: ${{ runner.os }}-smm-session
+      # ---------------------------
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
         run: |
-          pip install playwright requests beautifulsoup4
-          python -m playwright install --with-deps chromium
-      - name: Run
+          pip install playwright requests
+          python -m playwright install chromium
+
+      - name: Run bot
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SMM_EMAIL: ${{ secrets.SMM_EMAIL }}
-          SMM_PASSWORD: ${{ secrets.SMM_PASSWORD }}
-        run: python test.py
-      - name: Screenshot on Failure
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-image
-          path: error_screenshot.png
+          TELEGRAM_TOKEN: ${{ SECRETS.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ SECRETS.TELEGRAM_CHAT_ID }}
+          SMM_EMAIL: ${{ SECRETS.SMM_EMAIL }}
+          SMM_PASSWORD: ${{ SECRETS.SMM_PASSWORD }}
+        run: python bot.py
