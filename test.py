@@ -47,8 +47,6 @@ async def get_data():
             print(f"🌐 Navigating to {URL}...")
             await page.goto(URL, wait_until="networkidle", timeout=60000)
             
-            # 1. Trigger Login Modal via JS
-            print("🔑 Opening Login Modal...")
             # 1. Check if we are already on a login page before clicking
             print("🧐 Checking if login is already open...")
             email_selector = 'input[type="email"], input[placeholder*="Email"], #account'
