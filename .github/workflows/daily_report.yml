@@ -17,10 +17,14 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
-
+        run: |
+          pip install playwright requests beautifulsoup4
+          python -m playwright install --with-deps chromium
       - name: Run tracker
+      
         env:
-          TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python test.py
+          TOKEN: ${{ secrets.TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          SMM_EMAIL: ${{ secrets.SMM_EMAIL }}
+          SMM_PASSWORD: ${{ secrets.SMM_PASSWORD }}
+        run: python tracker.py
