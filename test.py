@@ -25,28 +25,29 @@ def send_msg(text):
 async def get_data():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+        # Standard desktop context to match the site's layout
         context = await browser.new_context(viewport={'width': 1280, 'height': 800})
         page = await context.new_page()
         
         try:
-            print(f"🌐 Opening {URL}...")
+            print(f"🌐 Navigating to {URL}...")
             await page.goto(URL, wait_until="networkidle", timeout=60000)
             
-            # Clear popups by pressing Escape
+            # Press Escape to dismiss any instant popups
             await page.keyboard.press("Escape")
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(3000)
 
-            # Target the specific 'Sign In' link/button in the top header
-            # Using get_by_role is more resilient
-            login_btn = page.get_by_role("button", name="Sign In").first or \
-                        page.get_by_text("Sign In").first
+            # Step 1: Force Click the "Sign In" button
+            # We use a broad text locator and dispatch_event to bypass overlays
+            login_link = page.get_by_text("Sign In").first
             
-            print("🔑 Clicking Sign In (Direct Event)...")
-            # dispatch_event bypasses actionability checks
-            await login_btn.dispatch_event("click")
+            print("🔑 Triggering Sign In event...")
+            # dispatch_event is the "master key" for blocked elements
+            await login_link.dispatch_event("click")
             
-            # Wait for the email field to appear in the DOM
-            print("📝 Waiting for login form...")
+            # Step 2: Fill the login form
+            print("📝 Entering credentials...")
+            # Wait for the email input to be in the DOM
             email_selector = 'input[type="email"], input[placeholder*="Email"]'
             await page.wait_for_selector(email_selector, state="attached", timeout=15000)
             
@@ -56,26 +57,28 @@ async def get_data():
             # Use dispatch_event for the final submit as well
             await page.locator('button[type="submit"], .submit-btn').first.dispatch_event("click")
             
-            print("⏳ Waiting for price data...")
+            # Step 3: Wait for price data to appear
+            print("⏳ Scaping data...")
             await page.wait_for_load_state("networkidle")
-            # Wait for the price element to be visible
+            # Wait for the specific price span
             await page.wait_for_selector(".strong___3sC58", timeout=20000)
             
             price = await page.inner_text(".strong___3sC58")
             change_raw = await page.inner_text(".row___1PIPI")
             
-            # Process text after "("
+            # Extraction logic: text after "("
             change = change_raw.split("(")[1].replace(")", "").strip() if "(" in change_raw else change_raw
             
             return price.strip(), change
             
         except Exception as e:
-            # Always save screenshot on any error
+            # Always capture a screenshot for debugging
             await page.screenshot(path="error_screenshot.png")
             print(f"❌ Automation Error: {e}")
             raise e
         finally:
             await browser.close()
+
 async def main():
     if datetime.now().weekday() < 5:
         try:
