@@ -27,4 +27,4 @@ jobs:
           CHAT_ID: ${{ secrets.CHAT_ID }}
           SMM_EMAIL: ${{ secrets.SMM_EMAIL }}
           SMM_PASSWORD: ${{ secrets.SMM_PASSWORD }}
-        run: python tracker.py
+        run: python test.py
