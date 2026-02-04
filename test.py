@@ -44,34 +44,31 @@ async def get_data():
                 if (loginBtn) loginBtn.click();
             }''')
 
-            # 2. Fill Credentials (FIXED ARGUMENT PASSING)
-            print("📝 Entering credentials...")
+            # 2. Fill Credentials (HUMAN SIMULATION)
+            print("📝 Entering credentials (Human Speed)...")
             email_selector = 'input[type="email"], input[placeholder*="Email"]'
-            await page.wait_for_selector(email_selector, state="attached", timeout=15000)
+            await page.wait_for_selector(email_selector, state="visible", timeout=15000)
 
-            # We pass email and password as a list/tuple to satisfy evaluate()
-            await page.evaluate('''([e, p]) => {
-                const email = document.querySelector('input[type="email"], input[placeholder*="Email"]');
-                const pass = document.querySelector('input[type="password"]');
-                if (email) {
-                    email.value = e;
-                    email.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                if (pass) {
-                    pass.value = p;
-                    pass.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }''', [SMM_EMAIL, SMM_PASSWORD])
-
-            # 3. Submit
-            print("⏳ Submitting login...")
-            await page.evaluate('document.querySelector("button[type=\'submit\'], .ant-btn-primary").click()')
+            # Focus and type to trigger the site's internal validation
+            await page.locator(email_selector).first.click()
+            await page.keyboard.type(SMM_EMAIL, delay=100)
             
-            # Wait for modal to disappear
+            await page.locator('input[type="password"]').first.click()
+            await page.keyboard.type(SMM_PASSWORD, delay=100)
+
+            # 3. Submit with a physical click simulation
+            print("⏳ Submitting login...")
+            # We target the specific red 'Sign in' button from your screenshot
+            submit_btn = page.locator('button:has-text("Sign in"), .ant-btn-primary').first
+            await submit_btn.click(force=True)
+            
+            # Wait for the modal to disappear
             try:
-                await page.wait_for_selector(".ant-modal", state="hidden", timeout=10000)
+                await page.wait_for_selector(".ant-modal", state="hidden", timeout=15000)
+                print("✅ Login successful.")
             except:
-                pass
+                print("⚠️ Login might have failed. Checking screenshot...")
+                await page.screenshot(path="login_debug.png")
 
             # 4. Re-navigate to ensure logged-in data is visible
             print(f"🚀 Refreshing data page...")
