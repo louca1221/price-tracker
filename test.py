@@ -75,21 +75,26 @@ async def get_data():
                 }
             }''', [SMM_EMAIL, SMM_PASSWORD])
 
-            # 3. Submit with Force Click
-            print("⏳ Submitting login...")
-            submit_btn = page.locator('button:has-text("Sign in"), .ant-btn-primary').first
-            await submit_btn.click(force=True)
+            # 3. Submit and Wait for the URL to change or the page to load
+            print("⏳ Submitting login and waiting for session...")
             
-            # Wait for modal to clear
+            # We click and wait for the "networkidle" state to ensure cookies are saved
+            await page.locator('button:has-text("Sign in"), .ant-btn-primary').first.click(force=True)
+            
+            # Wait for the login modal to disappear OR the price to appear
             try:
-                await page.wait_for_selector(".ant-modal", state="hidden", timeout=15000)
-                print("✅ Login modal closed.")
+                # We wait for the 'Sign in' button to go away, which means login worked
+                await page.wait_for_selector(".signInButton", state="hidden", timeout=20000)
+                print("✅ Session confirmed.")
             except:
-                print("⚠️ Modal still active, attempting refresh...")
+                print("⚠️ Login state not detected. Attempting emergency refresh...")
+                await page.goto(URL, wait_until="networkidle")
 
-            # 4. Refresh to view logged-in price
-            await page.goto(URL, wait_until="networkidle")
-            await page.wait_for_timeout(5000) 
+            # 4. Final render wait
+            # Instead of a fixed timeout, we wait for the price container specifically
+            print("📊 Looking for price data...")
+            price_locator = page.locator("div[class*='__avg']").first
+            await price_locator.wait_for(state="visible", timeout=30000)
 
             # 5. Extract Price and Change from dynamic divs
             print("📊 Extracting data...")
