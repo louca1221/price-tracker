@@ -1,9 +1,9 @@
 name: Daily Price Report
 
 on:
-  schedule:
-    - cron: '0 4 * * 1-5'
   workflow_dispatch:
+  repository_dispatch:
+    types: [trigger-rns]
 
 jobs:
   run-tracker:
