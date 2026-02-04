@@ -20,8 +20,8 @@ jobs:
         run: |
           pip install playwright requests beautifulsoup4
           python -m playwright install --with-deps chromium
-      - name: Run tracker
       
+      - name: Run tracker
         env:
           TOKEN: ${{ secrets.TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
