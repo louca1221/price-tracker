@@ -19,37 +19,33 @@ async def get_data():
 
         try:
             print(f"🌐 Navigating to {URL}...")
-            await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(3000)
+            await page.goto(URL, wait_until="networkidle", timeout=60000)
+            
+            # 1. Try to clear any popups by pressing Escape
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(2000)
 
-            # --- STEP 1: ACCEPT COOKIES ---
-            cookie_selectors = ['button:has-text("Accept")', 'button:has-text("Agree")', '.cookie-accept-btn', '#onetrust-accept-btn-handler']
-            for sel in cookie_selectors:
-                btn = page.locator(sel).first
-                if await btn.is_visible():
-                    print("🍪 Found cookie banner. Accepting...")
-                    await btn.click()
-                    await page.wait_for_timeout(1000)
-                    break
-
-            # --- STEP 2: HANDLE LOGIN ---
-            login_selectors = ['text="Sign In"', 'button:has-text("Login")', '.login-btn', 'span:has-text("Sign In")']
-            for selector in login_selectors:
-                btn = page.locator(selector).first
-                if await btn.is_visible():
-                    print(f"🔑 Clicking login via: {selector}")
-                    await btn.click()
-                    break
-
-            # Fill credentials (handling potential strict mode errors with .first)
-            await page.wait_for_selector('input[type="email"], input[placeholder*="Email"]', timeout=15000)
-            await page.locator('input[type="email"], input[placeholder*="Email"]').first.fill(SMM_EMAIL)
-            await page.locator('input[type="password"], input[placeholder*="Password"]').first.fill(SMM_PASSWORD)
-            await page.locator('button[type="submit"], .submit-btn').first.click()
+            # 2. Find and FORCE click the login button
+            # 'force=True' ignores the 'intercepts pointer events' error
+            login_btn = page.locator('text="Sign In", .signInButton, button:has-text("Sign In")').first
+            
+            if await login_btn.is_visible():
+                print("🔑 Clicking login (Forced)...")
+                await login_btn.click(force=True) 
+            
+            # 3. Fill Credentials
+            # We wait for the input to be attached to the page
+            await page.wait_for_selector('input[type="email"], input[placeholder*="Email"]', state="attached", timeout=15000)
+            await page.locator('input[type="email"]').first.fill(SMM_EMAIL)
+            await page.locator('input[type="password"]').first.fill(SMM_PASSWORD)
+            
+            # Force click the final submit button too
+            await page.locator('button[type="submit"], .submit-btn').first.click(force=True)
+            
+            # 4. Wait for redirection and price
             await page.wait_for_load_state("networkidle")
-
-            # --- STEP 3: SCRAPE ---
             await page.wait_for_selector(".strong___3sC58", timeout=20000)
+            
             price = await page.inner_text(".strong___3sC58")
             change_raw = await page.inner_text(".row___1PIPI")
 
