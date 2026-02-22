@@ -126,7 +126,7 @@ async def get_data():
             await browser.close()
 
 async def main():
-    if datetime.now().weekday() < 5:
+    if datetime.now().weekday() < 7:
         try:
             val_price, val_change = await get_data()
             
