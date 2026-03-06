@@ -102,11 +102,25 @@ async def get_data():
             else:
                 print("✅ Already logged in via session file!")
 
-            # --- 4. DATA EXTRACTION (Precise) ---
-            print("📊 Extracting price...")
+            # --- 4. DATA EXTRACTION (Safety-First) ---
+            print("📊 Looking for price data...")
             price_locator = page.locator("div[class*='__avg']").first
             await price_locator.wait_for(state="visible", timeout=30000)
             price = await price_locator.inner_text()
+            
+            print("📊 Checking for price change...")
+            change_locator = page.locator("div[class*='Change']").first
+            
+            # Use .count() to check if the div exists without waiting 30 seconds
+            if await change_locator.count() > 0:
+                change_raw = await change_locator.inner_text()
+                change = change_raw.replace('\n', ' ').strip()
+            else:
+                # If the div is missing, there was no change today
+                print("ℹ️ No change div found. Assuming 0.")
+                change = "0 (0.00%)"
+
+            return price.strip(), change
             
             # Target ONLY the change div to avoid grabbing the date again
             print("📊 Extracting change...")
@@ -131,8 +145,12 @@ async def main():
             val_price, val_change = await get_data()
             
             # --- EMOJI TOGGLE LOGIC ---
-            # If the change starts with '-', use 📉, otherwise use 📈
-            emoji = "📉" if val_change.startswith("-") else "📈"
+            if val_change.startswith("-"):
+                emoji = "📉"
+            elif val_change.startswith("0 (0.00%)"):
+                emoji = "↔️" # Stable emoji
+            else:
+                emoji = "📈"
             
             now_str = datetime.now().strftime("%b %d, %Y - %H:%M")
             report = (
